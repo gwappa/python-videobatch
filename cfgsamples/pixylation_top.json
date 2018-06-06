@@ -1,0 +1,27 @@
+{
+    "sourcedir": "",
+
+    "sources": [
+        "*top*.avi"
+    ],
+
+    "command": "pixylation",
+    "mode": "CM",
+
+    "maskdir": "",
+    "resultdir": "",
+
+    "masks": {
+        "Magenta": [260, 360],
+        "Green": [90, 225]
+    },
+
+    "ROIs": {
+        "Whiskers": {
+            "x": 318,
+            "y": 49,
+            "w": 286,
+            "h": 464
+        }
+    }
+}

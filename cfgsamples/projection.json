@@ -1,0 +1,11 @@
+{
+    "sourcedir": "",
+
+    "sources": [
+        "*.avi"
+    ],
+
+    "command": "projection",
+    "outdir": "",
+    "type": "max"
+}
