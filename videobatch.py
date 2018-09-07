@@ -259,29 +259,27 @@ class Projection(AbstractBatch):
         self._buffer = None
         print_status("-> {0}".format(path), flush=True)
 
-class Mask(object):
+class ColorMask(object):
     """a representation of a mask for Pixylation."""
     onset = -1
     offset = -1
-    _color = None
+    color = None
+
     def __init__(self, onset, offset):
         self.onset = onset
         self.offset = offset
+        self.color = (_np.array(_hsv((self.onset + self.offset)/720)[:-1], dtype=float)*255).round().astype(int)
 
     def __repr__(self):
-        return "Mask({0},{1})".format(self.onset, self.offset)
+        return "ColorMask({0},{1})".format(self.onset, self.offset)
 
     def apply(self, hues):
         return _np.logical_and(hues >= self.onset, hues < self.offset)
 
-    def as_color(self):
-        """returns its representative color"""
-        if self._color is None:
-            self._color = (_np.array(_hsv((self.onset + self.offset)/720)[:-1], dtype=float)*255).round().astype(int)
-        return self._color
-
 class ROI(object):
     """a base representation of a ROI for Pixylation."""
+    xpos = _np.array((), dtype=int)
+    ypos = _np.array((), dtype=int)
 
     def __new__(cls, specs):
         if isinstance(specs, (str, unicode)): # TODO: or path-like??
@@ -291,11 +289,19 @@ class ROI(object):
             roi = super(ROI,cls).__new__(RectangularROI)
             return roi
 
-    def is_empty(self):
-        return True
+    def __init__(self):
+        pass
 
-    def apply(self, values):
-        return values
+    def is_empty(self):
+        return self.xpos.size == 0
+
+    def crop(self, frame):
+        """returns cropped pixels as a (N,3) array"""
+        return frame[self.ypos,self.xpos]
+
+    def mark(self, frame, mask, value):
+        """marks the `mask`-ed pixels within this ROI in the `frame` to `value`"""
+        frame[self.ypos[mask], self.xpos[mask]] = value
 
 class RectangularROI(ROI):
     """a representation of a rectangular ROI for Pixylation."""
@@ -305,42 +311,34 @@ class RectangularROI(ROI):
     h = 1
 
     def __init__(self, specs):
+        super().__init__()
         self.x = specs.get('x',0)
         self.y = specs.get('y',0)
         self.w = specs.get('w',1)
         self.h = specs.get('h',1)
+        xvals = _np.arange(self.x, self.x + self.w)
+        yvals = _np.arange(self.y, self.y + self.h)
+        xvals, yvals = _np.meshgrid(xvals, yvals, indexing='xy')
+        self.xpos  = xvals.flatten()
+        self.ypos  = yvals.flatten()
+        print(self.xpos)
 
     def __repr__(self):
         return "RectangularROI(dict(x={0},y={1},w={2},h={3}))".format(self.x, self.y, self.w, self.h)
-
-    def is_empty(self):
-        return ((self.w) * (self.h) <= 1)
-
-    def apply(self, values):
-        values[:self.y,:] = False
-        values[(self.y+self.h):,:] = False
-        values[:,:self.x] = False
-        values[:,(self.x+self.w):] = False
-        return values
 
 class MaskROI(ROI):
     """a representation of a Mask-based ROI specification
     loadable from a B/W image file."""
     path = None
-    mask = None
 
     def __init__(self, specs):
+        super().__init__()
         self.path = specs
-        self.mask = _imread(specs).astype(bool)
+        mask = _imread(specs).astype(bool)
+        self.ypos, self.xpos = _np.where(mask)
 
     def __repr__(self):
         return "MaskROI('{}')".format(self.path)
-
-    def is_empty(self):
-        return _np.count_nonzero(self.mask) == 0
-
-    def apply(self, values):
-        return _np.logical_and(values, self.mask)
 
 _Htable = None
 _Ltable = None
@@ -373,9 +371,13 @@ def _initialize_tables():
         print_status("done.", flush=True)
 
 
-def as_HL(frame):
-    """returns the hue and lightness values for a frame"""
+def frame_as_HL(frame):
+    """returns the hue and lightness values for a (M,N,3) frame"""
     return _Htable[frame[:,:,0],frame[:,:,1],frame[:,:,2]], _Ltable[frame[:,:,0], frame[:,:,1], frame[:,:,2]]
+
+def vector_as_HL(vec):
+    """returns the hue and lightness values for a (N,3) vector of values"""
+    return _Htable[vec[:,0],vec[:,1],vec[:,2]], _Ltable[vec[:,0],vec[:,1],vec[:,2]]
 
 def _mask_entries(maskname):
     return "{0}_CM_X,{0}_CM_Y".format(maskname)
@@ -393,8 +395,6 @@ class Pixylation(AbstractBatch):
     _maskfiles = {}
     _masknames = []
     _resultfiles = {}
-    _xpos = None
-    _ypos = None
 
     def __init__(self, *src, **config):
         super(Pixylation, self).__init__(*src, **config)
@@ -406,13 +406,13 @@ class Pixylation(AbstractBatch):
         if string_is_empty(self.resultdir):
             self.resultdir = _os.getcwd()
 
-        self.masks = dict([(k, Mask(*v)) for k, v in get_items(config.get("masks", {}))])
+        self.masks = dict([(k, ColorMask(*v)) for k, v in get_items(config.get("colors", {}))])
         self.ROIs  = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
         _initialize_tables()
 
     def __repr__(self):
-        info = ["<< Pixylation >>", "[Masks]"]
+        info = ["<< Pixylation >>", "[Colors]"]
         for k, v in self.masks.items():
             info.append("{0}={1}".format(k, v))
         info.append("[ROIs]")
@@ -421,8 +421,6 @@ class Pixylation(AbstractBatch):
         return '\n'.join(info)
 
     def __start__(self, name):
-        self._xpos = None
-        self._ypos = None
         self._maskfile = None
         self._resultfiles = {}
         self._masknames = tuple(maskname for maskname in self.masks.keys())
@@ -454,28 +452,27 @@ class Pixylation(AbstractBatch):
             print_status("*** could not open: {0}".format(maskpath))
 
     def __update__(self, i, frame):
-        if self._xpos is None:
-            h, w, _ = frame.shape
-            x = _np.arange(1, w+1)
-            y = _np.arange(1, h+1)
-            self._xpos, self._ypos = _np.meshgrid(x, y, indexing='xy')
-        H, L = as_HL(frame)
         M = _np.zeros(frame.shape, dtype=int)
-        masked = dict((name, value.apply(H)) for name, value in get_items(self.masks))
         for roiname, roi in get_items(self.ROIs):
-            values = []
             if roiname not in self._resultfiles.keys():
                 continue
-            for maskname in self._masknames:
-                _match = roi.apply(masked[maskname].copy())
-                if _np.count_nonzero(_match) > 0:
-                    _weight = L[_match]
-                    _x = self._xpos[_match]
-                    _y = self._ypos[_match]
-                    values.append((_x*_weight).sum()/(_weight.sum()))
-                    values.append((_y*_weight).sum()/(_weight.sum()))
+            values = [] # placeholder for positions for each of the masks
 
-                    M[_match,:] = self.masks[maskname].as_color()
+            # prepare clipped xpos, ypos, H, L that corresponds to the ROI
+            roi_H, roi_L = vector_as_HL(roi.crop(frame))
+            
+            # check for color masks
+            for maskname, colormask in get_items(self.masks):
+                roi_match = colormask.apply(roi_H)
+                if _np.count_nonzero(roi_match) > 0:
+                    match_weight = roi_L[roi_match]
+                    match_x = roi.xpos[roi_match]
+                    match_y = roi.ypos[roi_match]
+                    xrepr = (match_x*match_weight).sum()/(match_weight.sum())
+                    yrepr = (match_y*match_weight).sum()/(match_weight.sum())
+                    values.append(xrepr+1)
+                    values.append(yrepr+1)
+                    roi.mark(M,roi_match,colormask.color)
                 else:
                     values.append(_np.nan)
                     values.append(_np.nan)

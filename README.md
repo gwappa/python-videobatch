@@ -5,7 +5,7 @@ the [Pixylator (ImageJ plugin)](https://github.com/gwappa/Pixylator).
 In fact, now that the module becomes a more general toolkit,
 you can in principle perform any types of frame-by-frame conversion of videos.
 
-The current version is `0.10.0`.
+The current version is `0.10.1`.
 
 Note that I do not provide any test code here! This is just
 out of my laziness...

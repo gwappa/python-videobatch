@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name='videobatch',
-    version='0.10.0',
+    version='0.10.1',
     description='a toolkit for frame-by-frame conversion of videos in batch',
     url='https://github.com/gwappa/python-videobatch',
     author='Keisuke Sehara',
