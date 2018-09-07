@@ -36,6 +36,7 @@ from matplotlib.cm import hsv as _hsv
 ### TODO: imsave is deprecated as of scipy 1.1.0
 ### may need to branch the function to use imageio.imwrite
 from scipy.misc import imsave as _imsave
+from scipy.misc import imread as _imread
 
 try:
     ucls = unicode # test if name 'unicode' exists
@@ -46,7 +47,9 @@ with _warnings.catch_warnings(record=True):
     _warnings.filterwarnings("ignore", message="avprobe", category=UserWarning)
     import skvideo.io as _vio
 
-H264_OUTPUT = {"-c:v": "libx264", "-preset": "slow", "-crf": "26"}
+OUTPUT_SPECS = {"-c:v": "libx264", "-preset": "slow", "-crf": "26"}
+
+PROFILE_TIME = False
 
 commands = dict()
 
@@ -278,19 +281,37 @@ class Mask(object):
         return self._color
 
 class ROI(object):
-    """a representation of a ROI for Pixylation."""
+    """a base representation of a ROI for Pixylation."""
+
+    def __new__(cls, specs):
+        if isinstance(specs, (str, unicode)): # TODO: or path-like??
+            roi = super(ROI,cls).__new__(MaskROI)
+            return roi
+        else: # assume dict
+            roi = super(ROI,cls).__new__(RectangularROI)
+            return roi
+
+    def is_empty(self):
+        return True
+
+    def apply(self, values):
+        return values
+
+class RectangularROI(ROI):
+    """a representation of a rectangular ROI for Pixylation."""
     x = 0
     y = 0
     w = 1
     h = 1
-    def __init__(self, x=0, y=0, w=1, h=1):
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
+
+    def __init__(self, specs):
+        self.x = specs.get('x',0)
+        self.y = specs.get('y',0)
+        self.w = specs.get('w',1)
+        self.h = specs.get('h',1)
 
     def __repr__(self):
-        return "ROI(x={0},y={1},w={2},h={3})".format(self.x, self.y, self.w, self.h)
+        return "RectangularROI(dict(x={0},y={1},w={2},h={3}))".format(self.x, self.y, self.w, self.h)
 
     def is_empty(self):
         return ((self.w) * (self.h) <= 1)
@@ -301,6 +322,25 @@ class ROI(object):
         values[:,:self.x] = False
         values[:,(self.x+self.w):] = False
         return values
+
+class MaskROI(ROI):
+    """a representation of a Mask-based ROI specification
+    loadable from a B/W image file."""
+    path = None
+    mask = None
+
+    def __init__(self, specs):
+        self.path = specs
+        self.mask = _imread(specs).astype(bool)
+
+    def __repr__(self):
+        return "MaskROI('{}')".format(self.path)
+
+    def is_empty(self):
+        return _np.count_nonzero(self.mask) == 0
+
+    def apply(self, values):
+        return _np.logical_and(values, self.mask)
 
 _Htable = None
 _Ltable = None
@@ -367,7 +407,7 @@ class Pixylation(AbstractBatch):
             self.resultdir = _os.getcwd()
 
         self.masks = dict([(k, Mask(*v)) for k, v in get_items(config.get("masks", {}))])
-        self.ROIs  = dict([(k, ROI(**v)) for k, v in get_items(config.get("ROIs", {}))])
+        self.ROIs  = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
         _initialize_tables()
 
@@ -405,9 +445,10 @@ class Pixylation(AbstractBatch):
         if len(self._resultfiles) == 0:
             raise RuntimeError("nothing to output for {0}".format(name))
 
-        maskpath = _os.path.join(self.maskdir, "MASK_{0}.avi".format(basename, roiname))
+        # maskpath = _os.path.join(self.maskdir, "MASK_{0}.avi".format(basename, roiname))
+        maskpath = _os.path.join(self.maskdir, "MASK_{0}.mp4".format(basename, roiname))
         try:
-            self._maskfile = _vio.FFmpegWriter(maskpath, outputdict=H264_OUTPUT)
+            self._maskfile = _vio.FFmpegWriter(maskpath, outputdict=OUTPUT_SPECS)
         except:
             _print_exc()
             print_status("*** could not open: {0}".format(maskpath))
@@ -447,8 +488,6 @@ class Pixylation(AbstractBatch):
             for fp in files.values():
                 force_close(fp)
 
-### NOT TESTED -->
-
 from collections import OrderedDict
 
 def get_value(roi, frame):
@@ -466,7 +505,7 @@ class Profile(AbstractBatch):
         self.resultdir = config.get("resultdir", None)
         if string_is_empty(self.resultdir):
             self.resultdir = _os.getcwd()
-        self.ROIs = dict([(k, ROI(**v)) for k, v in get_items(config.get("ROIs", {}))])
+        self.ROIs = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
 
     def __repr__(self):
@@ -516,10 +555,22 @@ def run(config):
     if cmd is None:
         raise ValueError("specify the command in the config file, using the 'command' key.")
     proc = commands[cmd](*src, **config)
+    if PROFILE_TIME == True:
+        import time
+        print(">> timing starting")
+        start = time.perf_counter()
     proc.run()
+    if PROFILE_TIME == True:
+        print(">> timing stopping")
+        stop  = time.perf_counter()
+        print("elapsed {:.3f} seconds".format(stop - start))
+
 
 if __name__ == '__main__':
     if len(_sys.argv) == 2:
         run(_sys.argv[1])
+    elif (len(_sys.argv) == 3) and (_sys.argv[1] in ('-t','--time')):
+        PROFILE_TIME = True
+        run(_sys.argv[2])
     else:
         print_usage()
