@@ -5,11 +5,15 @@ the [Pixylator (ImageJ plugin)](https://github.com/gwappa/Pixylator).
 In fact, now that the module becomes a more general toolkit,
 you can in principle perform any types of frame-by-frame conversion of videos.
 
-The current version is `0.10.1`.
+The current version is `0.10`.
 
 Note that I do not provide any test code here! This is just
 out of my laziness...
 Please poke me in case of any weird behavior of the code!
+
+## Documentation
+
+Rough documentation is [here](https://python-videobatch.readthedocs.io/en/latest/).
 
 ## Functionality
 
@@ -52,9 +56,6 @@ sub-commands, particularly `ffprobe`.
 Actually, `ffprobe` is the command that `scikit-video` uses to 
 find out the actual `ffmpeg` binary to use.
 
-## Documentation
-
-TODO
 
 ## Known issues
 

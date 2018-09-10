@@ -11,7 +11,7 @@
     "maskdir": "",
     "resultdir": "",
 
-    "masks": {
+    "colors": {
         "Magenta": [260, 360],
         "Green": [90, 225]
     },

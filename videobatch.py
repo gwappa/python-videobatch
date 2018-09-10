@@ -51,6 +51,8 @@ OUTPUT_SPECS = {"-c:v": "libx264", "-preset": "slow", "-crf": "26"}
 
 PROFILE_TIME = False
 
+VERSION_STR = "0.10.3"
+
 commands = dict()
 
 def command(name):
@@ -108,6 +110,8 @@ class Processor(object):
         """proc be an AbstractBatch object; path be a path to the video file."""
         if proc is None:
             raise ValueError("no procedure is specified for Processor")
+        if proc is None:
+            raise ValueError("no procedure is specified for Processor")
         elif path is None:
             raise ValueError("no file path is specified for Processor")
         self.proc = proc
@@ -145,7 +149,7 @@ class Processor(object):
 
 @command("test")
 class AbstractBatch(object):
-    """this is the superclass of every batch functions.
+    """this is the superclass of every batch functions. DO NOT USE THIS AS A COMMAND!
 
     to create a new batch function:
     1) derive from videobatch.AbstractBatch
@@ -193,7 +197,10 @@ class AbstractBatch(object):
 class Projection(AbstractBatch):
     """creates a t-projection image file.
     
-    'type' is one of ("max", "mean", "avg", "scale", "magenta_scale"). 'max' by default."""
+    (parameters)
+    <- 'type': one of ("max", "mean", "avg", "scale", "magenta_scale"). 'max' by default.
+    <- 'outdir': the directory where the output file(s) will go. defaults to the current directory.
+    """
     outdir = None
     projtype = None
     _buffer = None
@@ -385,7 +392,18 @@ def _mask_entries(maskname):
 @command("pixylation")
 class Pixylation(AbstractBatch):
     """runs 'Pixylator' with multiple masks/ROIs, and saves mask/result files.
-    currently CM-mode only"""
+    
+    (parameters)
+    <- 'mode': the method for converting matched pixels into a position. only has the "CM" mode for the moment.
+    <- 'colors': a dictionary where keys represent the names of colors and the values represent their color ranges.
+                 a color range is specified as [<from-hue>, <to-hue>].
+    <- 'ROIs': a dictionary where keys represent the names of ROIs and the values represent their regions.
+               a rectangular region can be specified as a dictionary {"x":..., "y":..., "w":..., "h":...}.
+               a free-shape region can be specified as a path to a B/W image (white pixels will be taken).
+    <- 'maskdir': the directory where the mask file(s) will go. defaults to the current directory.
+    <- 'resultdir': the directory where the result file(s) will go. defaults to the current directory.
+    """
+
     masks = {}
     ROIs  = {}
     mode      = None
@@ -493,13 +511,20 @@ def get_value(roi, frame):
 
 @command("profile")
 class Profile(AbstractBatch):
-    """generates a Z-profile of specified ROI(s)."""
+    """generates a Z-profile of specified ROI(s).
+    
+    (parameters)
+    <- 'ROIs': a dictionary where keys represent the names of ROIs and the values represent their regions.
+               a rectangular region can be specified as a dictionary {"x":..., "y":..., "w":..., "h":...}.
+               a free-shape region can be specified as a path to a B/W image (white pixels will be taken).
+    <- outdir: the directory where the result file(s) will go. defaults to the current directory.
+    """
 
     ROIs        = OrderedDict()
     resultdir   = None
 
     def __init__(self, *src, **config):
-        self.resultdir = config.get("resultdir", None)
+        self.resultdir = config.get("outdir", None)
         if string_is_empty(self.resultdir):
             self.resultdir = _os.getcwd()
         self.ROIs = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
@@ -537,9 +562,23 @@ class Profile(AbstractBatch):
 def print_usage():
     print("[usage]")
     print("    python {0} <path/to/config-file.json>".format(*(_sys.argv)))
+    print()
+    print("[base parameters]")
+    print("the JSON file must consist of a dictionary that contains the following keys and values: ")
+    
+    for param, desc in (("command", "(required) the command to run. see below for details."),
+                        ("sources", "(required) list or pattern(s) of file names to perform conversion."),
+                        ("sourcedir", "(optional) the directory where the program searches for the video. defaults to the current directory."),
+                        ):
+        print("{0:>15}: {1}".format("'{}'".format(param), desc))
+    print()
     print("[commands]")
     for key, val in get_items(commands):
-        print("{0:>15}: {1}".format(key, val.__doc__))
+        desc = "{0:>15}: {1}".format(key, val.__doc__)
+        lines = desc.split("\n")
+        print(lines[0])
+        for line in lines[2:]:
+            print(" "*13+line)
 
 def run(config):
     if isinstance(config, (str, unicode)):
