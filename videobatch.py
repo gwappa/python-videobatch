@@ -89,7 +89,7 @@ def force_close(fp):
 
 def ensure_directory(d):
     parent, child = _os.path.split(d)
-    if len(parent) > 0:
+    if (parent == d) or (len(parent) > 0): # is parent not the drive root?
         ensure_directory(parent)
     d = _os.path.join(parent, child)
     if not _os.path.exists(d):
