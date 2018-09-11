@@ -24,6 +24,7 @@ Rough documentation is [here](https://python-videobatch.readthedocs.io/en/latest
 ## Commands
 
 + `projection`: equivalent to ImageJ's "Z-projection" command.
++ `profile`:    equivalent to ImageJ's "Z-profile" command.
 + `pixylation`: equivalent to the "Pixylator" plugin.
 
 ## Installation

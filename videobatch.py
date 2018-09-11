@@ -51,7 +51,7 @@ OUTPUT_SPECS = {"-c:v": "libx264", "-preset": "slow", "-crf": "26"}
 
 PROFILE_TIME = False
 
-VERSION_STR = "0.10.3"
+VERSION_STR = "0.10.4"
 
 commands = dict()
 
@@ -427,6 +427,10 @@ class Pixylation(AbstractBatch):
         self.masks = dict([(k, ColorMask(*v)) for k, v in get_items(config.get("colors", {}))])
         self.ROIs  = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
+        if len(self.masks) == 0:
+            raise RuntimeError("No color masks found in the configuration; make sure that you have the 'colors' field in it.")
+        elif len(self.ROIS) == 0:
+            raise RuntimeError("No ROI settings found in the configuration; make sure that you have the 'ROIs' field in it.")
         _initialize_tables()
 
     def __repr__(self):
@@ -529,6 +533,8 @@ class Profile(AbstractBatch):
             self.resultdir = _os.getcwd()
         self.ROIs = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
+        elif len(self.ROIS) == 0:
+            raise RuntimeError("No ROI settings found in the configuration; make sure that you have the 'ROIs' field in it.")
 
     def __repr__(self):
         info = ["<< Profile >>"]
@@ -537,9 +543,6 @@ class Profile(AbstractBatch):
         return "\n".join(info)
 
     def __start__(self, name):
-        if len(self.ROIs) == 0:
-            raise RuntimeError("nothing to output for {0}".format(name))
-
         self._resultfile = None
         basename = _os.path.splitext(name)[0]
         ensure_directory(self.resultdir)
