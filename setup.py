@@ -12,6 +12,7 @@ setuptools.setup(
     install_requires=[
         'numpy>=1.3',
         'scipy>=0.7',
+        'imageio>=2.2',
         'matplotlib>=2.0',
         'sk-video>=1.1'
         ],
@@ -21,9 +22,9 @@ setuptools.setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
         ],
-    packages=setuptools.find_packages(),
+    packages=['videobatch',],
     entry_points={
-        'console_scripts': ['videobatch=videobatch']
+        'console_scripts': ['videobatch=videobatch.__main__:main']
     }
 )
 

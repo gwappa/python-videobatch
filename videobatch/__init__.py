@@ -33,10 +33,9 @@ import warnings as _warnings
 import numpy as _np
 from matplotlib.cm import hsv as _hsv
 
-### TODO: imsave is deprecated as of scipy 1.1.0
-### may need to branch the function to use imageio.imwrite
-from scipy.misc import imsave as _imsave
-from scipy.misc import imread as _imread
+### imsave is deprecated as of scipy 1.1.0
+from imageio import imread as _imread
+from imageio import imwrite as _imsave
 
 try:
     ucls = unicode # test if name 'unicode' exists
@@ -51,7 +50,7 @@ OUTPUT_SPECS = {"-c:v": "libx264", "-preset": "slow", "-crf": "26"}
 
 PROFILE_TIME = False
 
-VERSION_STR = "0.10.4"
+VERSION_STR = "1.0.0"
 
 commands = dict()
 
@@ -70,6 +69,10 @@ def command(name):
         commands[name] = cls
         return cls
     return register
+
+def set_profile_time(val):
+    global PROFILE_TIME
+    PROFILE_TIME = val
 
 def string_is_empty(s):
     return (s is None) or (len(s.strip()) == 0)
@@ -91,7 +94,7 @@ def force_close(fp):
 
 def ensure_directory(d):
     parent, child = _os.path.split(d)
-    if (parent == d) or (len(parent) > 0): # is parent not the drive root?
+    if (parent != d) and (len(parent) > 0): # is parent not the drive root?
         ensure_directory(parent)
     d = _os.path.join(parent, child)
     if not _os.path.exists(d):
@@ -429,7 +432,7 @@ class Pixylation(AbstractBatch):
         print("{0}".format(self))
         if len(self.masks) == 0:
             raise RuntimeError("No color masks found in the configuration; make sure that you have the 'colors' field in it.")
-        elif len(self.ROIS) == 0:
+        if len(self.ROIs) == 0:
             raise RuntimeError("No ROI settings found in the configuration; make sure that you have the 'ROIs' field in it.")
         _initialize_tables()
 
@@ -533,7 +536,7 @@ class Profile(AbstractBatch):
             self.resultdir = _os.getcwd()
         self.ROIs = dict([(k, ROI(v)) for k, v in get_items(config.get("ROIs", {}))])
         print("{0}".format(self))
-        elif len(self.ROIS) == 0:
+        if len(self.ROIS) == 0:
             raise RuntimeError("No ROI settings found in the configuration; make sure that you have the 'ROIs' field in it.")
 
     def __repr__(self):
@@ -591,6 +594,8 @@ def run(config):
             return
     cmd = config.get("command", None)
     src = config.get("sources", [])
+    if isinstance(src, (str, unicode)):
+        src = [src,]
     if cmd is None:
         raise ValueError("specify the command in the config file, using the 'command' key.")
     proc = commands[cmd](*src, **config)
@@ -604,12 +609,3 @@ def run(config):
         stop  = time.perf_counter()
         print("elapsed {:.3f} seconds".format(stop - start))
 
-
-if __name__ == '__main__':
-    if len(_sys.argv) == 2:
-        run(_sys.argv[1])
-    elif (len(_sys.argv) == 3) and (_sys.argv[1] in ('-t','--time')):
-        PROFILE_TIME = True
-        run(_sys.argv[2])
-    else:
-        print_usage()
